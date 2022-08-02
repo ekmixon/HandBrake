@@ -74,29 +74,22 @@ def main():
         print >> sys.stderr, ( "Error: %s"  % str(err))
         sys.exit(1)
 
-    top = dict()
+    top = {}
     for ii in dep_map:
         if ii.widget in top:
             continue
-        deps = list()
-        for jj in dep_map:
-            if jj.widget == ii.widget:
-                deps.append(jj.dep)
+        deps = [jj.dep for jj in dep_map if jj.widget == ii.widget]
         top[ii.widget] = deps
     json.dump(top, depsfile, indent=4)
 
-    top = dict()
+    top = {}
     for ii in dep_map:
         if ii.dep in top:
             continue
-        deps = list()
+        deps = []
         for jj in dep_map:
             if ii.dep == jj.dep:
-                rec = list()
-                rec.append(jj.widget)
-                rec.append(jj.enable)
-                rec.append(jj.die)
-                rec.append(jj.hide)
+                rec = [jj.widget, jj.enable, jj.die, jj.hide]
                 deps.append(rec)
         top[ii.dep] = deps
     json.dump(top, revfile, indent=4)

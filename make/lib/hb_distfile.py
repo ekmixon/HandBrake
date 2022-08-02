@@ -40,8 +40,7 @@ class Tool(object):
         with open(value, 'r') as file:
             data = json.load(file)
         parser.values.verbosity = data['verbosity']
-        extend = getattr(self, '_load_config2', None)
-        if extend:
+        if extend := getattr(self, '_load_config2', None):
             extend(parser, data)
 
     ## newline not required
@@ -100,7 +99,14 @@ class Tool(object):
 
     ## generate a temporary filename - not worried about race conditions
     def mktmpname(self, filename):
-        return filename + '.' + ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(8)) + '.tmp'
+        return (
+            f'{filename}.'
+            + ''.join(
+                random.choice(string.ascii_lowercase + string.digits)
+                for _ in range(8)
+            )
+            + '.tmp'
+        )
 
 ###############################################################################
 

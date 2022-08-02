@@ -81,7 +81,7 @@ class FlatpakManifest:
             if islocal(value.url):
                 source["path"] = value.url
             else:
-                if value.sha256 == "" or value.sha256 == None:
+                if value.sha256 == "" or value.sha256 is None:
                     continue
                 source["url"] = value.url
                 source["sha256"] = value.sha256
@@ -138,13 +138,13 @@ if __name__ == "__main__":
             usage()
             sys.exit()
         elif opt in ("-a", "--archive"):
-            if arg != None and arg != "":
+            if arg not in [None, ""]:
                 current_source = arg
                 source_list[arg] = SourceEntry(arg, SourceType.archive)
             else:
                 current_source = None
         elif opt in ("-c", "--contrib"):
-            if arg != None and arg != "":
+            if arg not in [None, ""]:
                 current_source = arg
                 source_list[arg] = SourceEntry(arg, SourceType.contrib)
             else:
@@ -161,11 +161,7 @@ if __name__ == "__main__":
         elif opt in ("-p", "--plugin"):
             plugin = 1;
 
-    if len(args) > 0:
-        dst = args[0]
-    else:
-        dst = None
-
+    dst = args[0] if len(args) > 0 else None
     if plugin:
         manifest = FlatpakPluginManifest(runtime, template)
     else:

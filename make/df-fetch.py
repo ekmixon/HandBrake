@@ -56,7 +56,7 @@ class Ensure(object):
         super(Ensure, self).__delattr__(key)
 
     def __setattr__(self, key, value):
-        if not key in self.__dict__:
+        if key not in self.__dict__:
             self._items.insert(0, value)
         super(Ensure, self).__setattr__(key, value)
 
@@ -92,27 +92,23 @@ class Tool(hb_distfile.Tool):
 
     def _run(self, error):
         # throttle instances
-        if tool.options.jobs < 1:
-            tool.options.jobs = 1
-        if tool.options.jobs > 20:
-            tool.options.jobs = 20
+        tool.options.jobs = max(tool.options.jobs, 1)
+        tool.options.jobs = min(tool.options.jobs, 20)
         dirname = os.path.dirname(tool.options.output)
         time.sleep(random.uniform(0.1,2))
-        active = len(glob.glob(dirname + '/*.tmp'))
+        active = len(glob.glob(f'{dirname}/*.tmp'))
         while active >= tool.options.jobs:
             time.sleep(2)
-            active = len(glob.glob(dirname + '/*.tmp'))
+            active = len(glob.glob(f'{dirname}/*.tmp'))
         # handle disabled
         if self.options.disable:
             raise error('administratively disabled')
         ## create URL objects and keep active
         urls = []
-        i = 0
-        for arg in self.args[1:]:
+        for i, arg in enumerate(self.args[1:]):
             url = URL(arg, i)
             if url.active:
                 urls.append(url)
-            i += 1
         ## try each URL until first success
         error.op = 'download'
         if not urls:
@@ -127,7 +123,7 @@ class Tool(hb_distfile.Tool):
                 ## propagate exception if no remaining urls
                 if not urls:
                     raise
-                self.errln('%s failure; %s' % (error.op,x))
+                self.errln(f'{error.op} failure; {x}')
 
     def run(self):
         error = hb_distfile.ToolError(self.name)
@@ -135,7 +131,7 @@ class Tool(hb_distfile.Tool):
             self._run(error)
         except Exception as x:
             self.debug_exception()
-            self.errln('%s failure; %s' % (error.op,x), exit=1)
+            self.errln(f'{error.op} failure; {x}', exit=1)
 
 ###############################################################################
 
@@ -154,23 +150,19 @@ class URL(object):
     def _accept(self):
         if not tool.options.accept_url:
             return
-        index = 0
-        for spec in tool.options.accept_url:
+        for index, spec in enumerate(tool.options.accept_url):
             if re.search(spec, self.url):
                 self.rule = 'via accept rule[%d]: %s' % (index,spec)
                 return
-            index += 1
         self.active = False
         self.rule = 'no matching accept rule'
 
     def _deny(self):
-        index = 0
-        for spec in tool.options.deny_url:
+        for index, spec in enumerate(tool.options.deny_url):
             if re.search(spec, self.url):
                 self.active = False
                 self.rule = 'via deny rule[%d]: %s' % (index,spec)
                 return
-            index += 1
 
     def _download(self, error, ensure):
         filename = tool.options.output
@@ -211,19 +203,19 @@ class URL(object):
             raise error('expected %d bytes, got %d bytes' % (content_length,data_total))
         s = 'download total: %9d bytes\n' % data_total
         if filename:
-            s += 'sha256 (%s) = %s' % (filename,hasher.hexdigest())
+            s += f'sha256 ({filename}) = {hasher.hexdigest()}'
         else:
-            s += 'sha256 = %s' % (hasher.hexdigest())
+            s += f'sha256 = {hasher.hexdigest()}'
         if tool.options.sha256:
             sha256_pass = tool.options.sha256 == hasher.hexdigest()
-            s += ' (%s)' % ('pass' if sha256_pass else 'fail; expecting %s' % tool.options.sha256)
+            s += f" ({'pass' if sha256_pass else f'fail; expecting {tool.options.sha256}'})"
+
         tool.infof('%s\n' % s)
         if filename and tool.options.sha256:
-            if sha256_pass:
-                if os.access(filename, os.F_OK) and not os.access(filename, os.W_OK):
-                    raise error("permission denied: '%s'" % filename)
-            else:
+            if not sha256_pass:
                 raise error("expected sha256 hash '%s', got '%s'" % (tool.options.sha256, hasher.hexdigest()))
+            if os.access(filename, os.F_OK) and not os.access(filename, os.W_OK):
+                raise error("permission denied: '%s'" % filename)
             os.rename(ftmp,filename)
             del ensure.unlink_ftmp
 

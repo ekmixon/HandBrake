@@ -54,7 +54,7 @@ class Configure( object ):
 
         ## compute src dir which is 2 dirs up from this script
         self.src_dir = os.path.normpath( sys.argv[0] )
-        for i in range( 2 ):
+        for _ in range( 2 ):
             self.src_dir = os.path.dirname( self.src_dir )
         if len( self.src_dir ) == 0:
             self.src_dir = os.curdir
@@ -130,9 +130,8 @@ class Configure( object ):
         dir = os.path.dirname( args[0] )
         if len(args) > 1 and args[1].find('w') != -1:
             self.mkdirs( dir )
-        m = re.match( '^(.*)\.tmp\..{8}$', args[0] )
-        if m:
-            self.infof( 'write: %s\n', m.group(1) )
+        if m := re.match('^(.*)\.tmp\..{8}$', args[0]):
+            self.infof('write: %s\n', m[1])
         else:
             self.infof( 'write: %s\n', args[0] )
 
@@ -160,10 +159,7 @@ class Configure( object ):
     ## On fail, returns None.
     def findExecutable( self, name ):
         if len( os.path.split(name)[0] ):
-            if os.access( name, os.X_OK ):
-                return name
-            return None
-
+            return name if os.access( name, os.X_OK ) else None
         path = os.getenv( 'PATH' ) or os.defpath
         for dir in path.split( os.pathsep ):
             f = os.path.join( dir, name )
@@ -185,9 +181,7 @@ class Configure( object ):
         i = len(os.path.commonprefix([start_list, path_list]))
 
         rel_list = [os.pardir] * (len(start_list)-i) + path_list[i:]
-        if not rel_list:
-            return os.curdir
-        return os.path.join(*rel_list)
+        return os.path.join(*rel_list) if rel_list else os.curdir
 
     ## update with parsed cli options
     def update_cli( self, options ):
@@ -196,11 +190,11 @@ class Configure( object ):
         self.prefix_dir = os.path.normpath( options.prefix )
         if build_tuple.match( '*-*-darwin*' ) and options.cross is None:
             self.xcode_prefix_dir = os.path.normpath( options.xcode_prefix )
-        if options.sysroot != None:
-                self.sysroot_dir = os.path.normpath( options.sysroot )
-        else:
-                self.sysroot_dir = ""
+        if options.sysroot is None:
+            self.sysroot_dir = ""
 
+        else:
+            self.sysroot_dir = os.path.normpath( options.sysroot )
         try:
                 self.minver = options.minver
         except:
@@ -212,7 +206,9 @@ class Configure( object ):
 
     ## generate a temporary filename - not worried about race conditions
     def mktmpname( self, filename ):
-        return filename + '.tmp.' + ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(8))
+        return f'{filename}.tmp.' + ''.join(
+            random.choice(string.ascii_lowercase + string.digits) for _ in range(8)
+        )
 
 ###############################################################################
 ##
@@ -305,11 +301,7 @@ class ShellProbe( Action ):
         data = pipe.communicate()
         self.fail = pipe.returncode != 0
 
-        if data[0]:
-            self.session = data[0].splitlines()
-        else:
-            self.session = []
-
+        self.session = data[0].splitlines() if data[0] else []
         if pipe.returncode:
             self.msg_end = 'code %d' % (pipe.returncode)
 
@@ -335,17 +327,19 @@ class CCProbe( Action ):
         with open( 'conftest.c', 'w' ) as out_file:
             out_file.write( self.test_file )
         ## pipe and redirect stderr to stdout; effects communicate result
-        pipe = subprocess.Popen( '%s -c -o conftest.o conftest.c' % self.command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT )
+        pipe = subprocess.Popen(
+            f'{self.command} -c -o conftest.o conftest.c',
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+
 
         ## read data into memory buffers, only first element (stdout) data is used
         data = pipe.communicate()
         self.fail = pipe.returncode != 0
 
-        if data[0]:
-            self.session = data[0].splitlines()
-        else:
-            self.session = []
-
+        self.session = data[0].splitlines() if data[0] else []
         if pipe.returncode:
             self.msg_end = 'code %d' % (pipe.returncode)
         os.remove( 'conftest.c' )
@@ -373,20 +367,20 @@ def PkgConfigTest(args, lib):
         return fail, msg_end, session
 
     ## pipe and redirect stderr to stdout; effects communicate result
-    pipe = subprocess.Popen( '%s %s %s' %
-            (Tools.pkgconfig.pathname, args, lib),
-            shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT )
+    pipe = subprocess.Popen(
+        f'{Tools.pkgconfig.pathname} {args} {lib}',
+        shell=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+
 
     ## read data into memory buffers, only first element (stdout)
     ## data is used
     data = pipe.communicate()
     fail = pipe.returncode != 0
 
-    if data[0]:
-        session = data[0].splitlines()
-    else:
-        session = []
-
+    session = data[0].splitlines() if data[0] else []
     if pipe.returncode:
         msg_end = 'code %d' % (pipe.returncode)
 
@@ -419,21 +413,20 @@ def LDTest(command, lib, test_file):
     with open( 'conftest.c', 'w' ) as out_file:
         out_file.write( test_file )
     ## pipe and redirect stderr to stdout; effects communicate result
-    pipe = subprocess.Popen( '%s -o conftest conftest.c %s' % (command, lib), shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT )
+    pipe = subprocess.Popen(
+        f'{command} -o conftest conftest.c {lib}',
+        shell=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+
 
     ## read data into memory buffers, only first element (stdout) data is used
     data = pipe.communicate()
     fail = pipe.returncode != 0
 
-    if data[0]:
-        session = data[0].splitlines()
-    else:
-        session = []
-
-    msg_end = ''
-    if pipe.returncode:
-        msg_end = 'code %d' % (pipe.returncode)
-
+    session = data[0].splitlines() if data[0] else []
+    msg_end = 'code %d' % (pipe.returncode) if pipe.returncode else ''
     os.remove( 'conftest.c' )
     if not fail:
         try:
@@ -486,7 +479,9 @@ class ChkLib( Action ):
 
         ## If pkg-config fails, try compiling and linking test file
         self.fail, self.msg_end, session = LDTest(
-                            self.command, '-l%s' % self.lib, self.test_file)
+            self.command, f'-l{self.lib}', self.test_file
+        )
+
         self.session.append(session)
 
 ###############################################################################
@@ -504,7 +499,9 @@ class BuildTupleProbe( ShellProbe, list ):
     GNU_TUPLE_RE = '([^-]+)-?([^-]*)-([^0-9-]+)([^-]*)-?([^-]*)'
 
     def __init__( self ):
-        super( BuildTupleProbe, self ).__init__( 'build tuple', '%s/config.guess' % (cfg.dir), abort=True, head=True )
+        super(BuildTupleProbe, self).__init__(
+            'build tuple', f'{cfg.dir}/config.guess', abort=True, head=True
+        )
 
     def _parseSession( self ):
         self.spec = self.session[0].decode('utf-8') if self.session else ''
@@ -513,7 +510,7 @@ class BuildTupleProbe( ShellProbe, list ):
         m = re.match( BuildTupleProbe.GNU_TUPLE_RE, self.spec )
         if not m:
             self.fail = True
-            self.msg_end = 'invalid build tuple: %s' % (self.spec)
+            self.msg_end = f'invalid build tuple: {self.spec}'
             return
 
         self.msg_end = self.spec
@@ -530,9 +527,12 @@ class BuildTupleProbe( ShellProbe, list ):
 
         ## special mapping for Apple Silicon
         ## config.guess returns aarch64, we need arm64
-        if self.vendor == 'apple' and self.system == 'darwin':
-            if self.machine == 'aarch64':
-                self[0] = self.machine = 'arm64'
+        if (
+            self.vendor == 'apple'
+            and self.system == 'darwin'
+            and self.machine == 'aarch64'
+        ):
+            self[0] = self.machine = 'arm64'
 
         ## nice formal name for 'system'
         self.systemf = platform.system()
@@ -542,10 +542,7 @@ class BuildTupleProbe( ShellProbe, list ):
 
     ## glob-match against spec
     def match( self, *specs ):
-        for spec in specs:
-            if fnmatch.fnmatch( self.spec, spec ):
-                return True
-        return False
+        return any(fnmatch.fnmatch( self.spec, spec ) for spec in specs)
 
 ###############################################################################
 
@@ -560,9 +557,12 @@ class HostTupleAction( Action, list ):
 
         ## special mapping for Apple Silicon
         ## config.guess returns aarch64, we need arm64
-        if build_tuple.vendor == 'apple' and build_tuple.system == 'darwin':
-            if build_tuple.spec.startswith('aarch64'):
-                build_tuple.spec = 'arm64' + build_tuple.spec.lstrip('aarch64')
+        if (
+            build_tuple.vendor == 'apple'
+            and build_tuple.system == 'darwin'
+            and build_tuple.spec.startswith('aarch64')
+        ):
+            build_tuple.spec = 'arm64' + build_tuple.spec.lstrip('aarch64')
 
         if cross is not None:
             self.spec = os.path.basename( cross ).rstrip( '-' )
@@ -576,7 +576,7 @@ class HostTupleAction( Action, list ):
         ## grok GNU build tuples
         m = re.match( BuildTupleProbe.GNU_TUPLE_RE, self.spec )
         if not m:
-            self.msg_end = 'invalid build tuple: %s' % (self.spec)
+            self.msg_end = f'invalid build tuple: {self.spec}'
             return
 
         self.msg_end = self.spec
@@ -604,11 +604,12 @@ class HostTupleAction( Action, list ):
             elif self.systemf:
                 self.systemf = self.systemf.capitalize()
 
-        self.title = '%s %s' % (self.systemf,self.machine)
+        self.title = f'{self.systemf} {self.machine}'
         self.fail = False
 
-        self.spec = ('%s-%s-%s%s-%s' % (self.machine, self.vendor, self.system,
-                                        self.release, self.extra)).rstrip('-')
+        self.spec = f'{self.machine}-{self.vendor}-{self.system}{self.release}-{self.extra}'.rstrip(
+            '-'
+        )
 
     def _action( self ):
         try:
@@ -618,10 +619,7 @@ class HostTupleAction( Action, list ):
 
     ## glob-match against spec
     def match( self, *specs ):
-        for spec in specs:
-            if fnmatch.fnmatch( self.spec, spec ):
-                return True
-        return False
+        return any(fnmatch.fnmatch( self.spec, spec ) for spec in specs)
 
 ###############################################################################
 ##
@@ -632,7 +630,7 @@ class HostTupleAction( Action, list ):
 ##
 class IfHost( object ):
     def __init__( self, value, *specs, **kwargs ):
-        self.value = kwargs.get('none',None)
+        self.value = kwargs.get('none')
         for spec in specs:
             if host_tuple.match( spec ):
                 self.value = value
@@ -646,7 +644,7 @@ class IfHost( object ):
 
 class IfBuild( object ):
     def __init__( self, value, *specs, **kwargs ):
-        self.value = kwargs.get('none',None)
+        self.value = kwargs.get('none')
         for spec in specs:
             if build_tuple.match( spec ):
                 self.value = value
@@ -691,15 +689,15 @@ class ArchAction( Action ):
         elif host_tuple.match( '*-*-mingw*' ):
             pass
         elif host_tuple.match( '*-*-darwin*' ):
-            self.mode['arm64']  =  'arm64-apple-darwin%s' % (host_tuple.release)
-            self.mode['x86_64'] = 'x86_64-apple-darwin%s' % (host_tuple.release)
+            self.mode['arm64'] = f'arm64-apple-darwin{host_tuple.release}'
+            self.mode['x86_64'] = f'x86_64-apple-darwin{host_tuple.release}'
         elif host_tuple.match( '*-*-linux*' ):
             pass
         elif host_tuple.match( '*-*-solaris*' ):
             pass
         elif host_tuple.match( '*-*-freebsd*' ):
-            self.mode['i386']   = 'i386-portsbuild-freebsd%s' % (host_tuple.release)
-            self.mode['amd64'] = 'amd64-portsbuild-freebsd%s' % (host_tuple.release)
+            self.mode['i386'] = f'i386-portsbuild-freebsd{host_tuple.release}'
+            self.mode['amd64'] = f'amd64-portsbuild-freebsd{host_tuple.release}'
         else:
             self.msg_pass = 'WARNING'
 
@@ -721,8 +719,7 @@ class CoreProbe( Action ):
             ## good for darwin9.6.0 and linux
             try:
                 self.count = os.sysconf( 'SC_NPROCESSORS_ONLN' )
-                if self.count < 1:
-                    self.count = 1
+                self.count = max(self.count, 1)
                 self.fail = False
             except:
                 pass
@@ -731,8 +728,7 @@ class CoreProbe( Action ):
             ## windows
             try:
                 self.count = int( os.environ['NUMBER_OF_PROCESSORS'] )
-                if self.count < 1:
-                    self.count = 1
+                self.count = max(self.count, 1)
                 self.fail = False
             except:
                 pass
@@ -743,14 +739,10 @@ class CoreProbe( Action ):
         elif self.count > 64:
             self.count = 64
 
-        if options.launch:
-            if options.launch_jobs == 0:
-                self.jobs = core.count
-            else:
-                self.jobs = options.launch_jobs
-        else:
+        if options.launch and options.launch_jobs == 0 or not options.launch:
             self.jobs = core.count
-
+        else:
+            self.jobs = options.launch_jobs
         self.msg_end = str(self.count)
 
 ###############################################################################
@@ -773,35 +765,38 @@ class SelectMode( dict ):
         self.descr = descr
         self.modes = modes
         self.what  = kwargs.get('what',' mode')
-        if modes:
-            self.default = kwargs.get('default',modes[0][0])
-        else:
-            self.default = None
+        self.default = kwargs.get('default',modes[0][0]) if modes else None
         self.mode = self.default
 
     def cli_add_argument( self, parser, option ):
-        parser.add_argument(option, nargs='?', metavar='MODE',
-            default=self.mode, const=self.mode,
-            help='select %s%s: %s' % (self.descr,self.what,self.toString()),
-            action=StoreCallbackAction, callback=self.cli_callback)
+        parser.add_argument(
+            option,
+            nargs='?',
+            metavar='MODE',
+            default=self.mode,
+            const=self.mode,
+            help=f'select {self.descr}{self.what}: {self.toString()}',
+            action=StoreCallbackAction,
+            callback=self.cli_callback,
+        )
 
     def cli_callback( self, action, value ):
         if value not in self:
-            raise argparse.ArgumentError(action,
-                'invalid %s%s: %s (choose from: %s)'
-                % (self.descr, self.what, value, self.toString(True)))
+            raise argparse.ArgumentError(
+                action,
+                f'invalid {self.descr}{self.what}: {value} (choose from: {self.toString(True)})',
+            )
+
         self.mode = value
 
     def toString( self, nodefault=False ):
-        keys = list(self.copy().keys())
-        keys.sort()
+        keys = sorted(self.copy().keys())
         if len(self) == 1:
-            value = self.mode
+            return self.mode
         elif nodefault:
-            value = ' '.join( keys )
+            return ' '.join( keys )
         else:
-            value = '%s [%s]' % (' '.join( keys ), self.mode )
-        return value
+            return f"{' '.join(keys)} [{self.mode}]"
 
 ###############################################################################
 ##
@@ -826,8 +821,7 @@ class RepoProbe( ShellProbe ):
         except:
             sys.exit( 1 )
 
-        super( RepoProbe, self ).__init__( 'repo info', '%s %s' %
-                                            (repo_info, cfg.src_dir) )
+        super( RepoProbe, self ).__init__('repo info', f'{repo_info} {cfg.src_dir}')
 
         self.url       = 'git://nowhere.com/project/unknown'
         self.tag       = ''
@@ -865,7 +859,7 @@ class RepoProbe( ShellProbe ):
             elif name == 'REV':
                 self.rev = int( value )
             elif name == 'DATE':
-                self.date = datetime.strptime(value[0:19], "%Y-%m-%d %H:%M:%S")
+                self.date = datetime.strptime(value[:19], "%Y-%m-%d %H:%M:%S")
 
                 # strptime can't handle UTC offset
                 m = re.match( '^([-+]?[0-9]{2})([0-9]{2})$', value[20:])
@@ -882,11 +876,7 @@ class RepoProbe( ShellProbe ):
             elif name == 'HASH':
                 self.hash = value
             elif name == 'SHORTHASH':
-                if value != '':
-                    self.shorthash = value
-                else:
-                    self.shorthash = self.hash
-
+                self.shorthash = value if value != '' else self.hash
         # type-classification via repository URL
         if self.url == project.url_repo_ssh:
             self.url = project.url_repo  # official repo, SSH to HTTPS
@@ -956,7 +946,7 @@ class Project( Action ):
     def _action( self ):
         ## add architecture to URL only for Mac
         if fnmatch.fnmatch( host_tuple.spec, '*-*-darwin*' ):
-            url_arch = '.%s' % (arch.mode.mode)
+            url_arch = f'.{arch.mode.mode}'
         else:
             url_arch = ''
 
@@ -978,28 +968,20 @@ class Project( Action ):
 
         if repo.type != 'release' or options.snapshot:
             self.version = repo.date.strftime("%Y%m%d%H%M%S")
-            self.version += '-%s' % (repo.shorthash)
+            self.version += f'-{repo.shorthash}'
             if repo.branch != '':
-                self.version += '-%s' % (repo.branch)
+                self.version += f'-{repo.branch}'
 
             self.debversion = repo.date.strftime("%Y%m%d%H%M%S")
-            self.debversion += '-%s' % (repo.shorthash)
+            self.debversion += f'-{repo.shorthash}'
             if repo.branch != '':
-                self.debversion += '-%s' % (repo.branch)
+                self.debversion += f'-{repo.branch}'
 
             url_ctype = '_unstable'
             url_ntype = 'unstable'
             self.build = time.strftime('%Y%m%d', now) + '01'
-            self.title = '%s %s (%s)' % (self.name,self.version,self.build)
         else:
-            m = re.match('^([a-zA-Z]+)\.([0-9]+)$', self.suffix)
-            if not m:
-                # Regular release
-                self.version = '%d.%d.%d' % (self.vmajor,self.vminor,self.vpoint)
-                self.debversion = '%d.%d.%d' % (self.vmajor, self.vminor, self.vpoint)
-                url_ctype = ''
-                url_ntype = 'stable'
-            else:
+            if m := re.match('^([a-zA-Z]+)\.([0-9]+)$', self.suffix):
                 (special, spoint,) = m.groups()
                 self.special = special
                 self.spoint = int(spoint)
@@ -1008,13 +990,18 @@ class Project( Action ):
                 url_ctype = '_unstable'
                 url_ntype = 'unstable'
 
+            else:
+                # Regular release
+                self.version = '%d.%d.%d' % (self.vmajor,self.vminor,self.vpoint)
+                self.debversion = '%d.%d.%d' % (self.vmajor, self.vminor, self.vpoint)
+                url_ctype = ''
+                url_ntype = 'stable'
             self.build = time.strftime('%Y%m%d', now) + '00'
-            self.title = '%s %s (%s)' % (self.name,self.version,self.build)
+        self.title = f'{self.name} {self.version} ({self.build})'
+        self.url_appcast = f'https://handbrake.fr/appcast{url_ctype}{url_arch}.xml'
+        self.url_appnote = f'https://handbrake.fr/appcast/{url_ntype}.html'
 
-        self.url_appcast = 'https://handbrake.fr/appcast%s%s.xml' % (url_ctype,url_arch)
-        self.url_appnote = 'https://handbrake.fr/appcast/%s.html' % (url_ntype)
-
-        self.msg_end = '%s (%s)' % (self.name,repo.type)
+        self.msg_end = f'{self.name} ({repo.type})'
         self.fail = False
 
 ###############################################################################
@@ -1024,7 +1011,7 @@ class ToolProbe( Action ):
 
     def __init__( self, var, option, *names, **kwargs ):
         super( ToolProbe, self ).__init__( 'find', abort=kwargs.get('abort',True) )
-        if not self in ToolProbe.tools:
+        if self not in ToolProbe.tools:
             ToolProbe.tools.append( self )
         self.var    = var
         self.option = option
@@ -1042,16 +1029,16 @@ class ToolProbe( Action ):
         self.pathname = self.names[0]
         self.abort = kwargs.get('abort', True)
         self.versionopt = kwargs.get('versionopt', '--version')
-        self.minversion = kwargs.get('minversion', None)
-        self.rexpr = kwargs.get('rexpr', None)
+        self.minversion = kwargs.get('minversion')
+        self.rexpr = kwargs.get('rexpr')
 
     def _action( self ):
-        self.session = []
-        for i,name in enumerate(self.names):
-            self.session.append( 'name[%d] = %s' % (i,name) )
+        self.session = [
+            'name[%d] = %s' % (i, name) for i, name in enumerate(self.names)
+        ]
+
         for name in self.names:
-            f = cfg.findExecutable( name )
-            if f:
+            if f := cfg.findExecutable(name):
                 self.pathname = f
                 self.fail = False
                 self.msg_end = f
@@ -1062,9 +1049,14 @@ class ToolProbe( Action ):
             self.version = VersionProbe( self.name, [self.pathname, self.versionopt], abort=self.abort, minversion=self.minversion, rexpr=self.rexpr )
 
     def cli_add_argument( self, parser ):
-        parser.add_argument( '--'+self.option, nargs=1, metavar='PROG',
-            help='[%s]' % (self.pathname),
-            action=StoreCallbackAction, callback=self.cli_callback )
+        parser.add_argument(
+            f'--{self.option}',
+            nargs=1,
+            metavar='PROG',
+            help=f'[{self.pathname}]',
+            action=StoreCallbackAction,
+            callback=self.cli_callback,
+        )
 
     def cli_callback( self, action, value ):
         # set pool to include only the user specified tool
@@ -1099,7 +1091,12 @@ class ToolProbe( Action ):
 ##
 class VersionProbe( Action ):
     def __init__( self, name, command, minversion=None, rexpr=None, abort=False ):
-        super( VersionProbe, self ).__init__( 'version probe', '%s %s' % (os.path.basename(command[0]),'.'.join([str(i) for i in minversion])), abort )
+        super(VersionProbe, self).__init__(
+            'version probe',
+            f"{os.path.basename(command[0])} {'.'.join([str(i) for i in minversion])}",
+            abort,
+        )
+
         self.name = name
         self.command = command
         self.abort = abort
@@ -1158,12 +1155,10 @@ class VersionProbe( Action ):
             break
 
     def inadequate( self ):
-        if not self.minversion:
-            return False
-        return self.lesser( self.minversion )
+        return self.lesser( self.minversion ) if self.minversion else False
 
     def lesser( self, ivers ):
-        for i in range(0,3):
+        for i in range(3):
             if self.ivers[i] < ivers[i]:
                 return True
             elif self.ivers[i] > ivers[i]:
@@ -1185,19 +1180,18 @@ class ConfigDocument:
 
     def _outputMake( self, out_file, namelen, name, value, append ):
         if append:
-            if value == None or len(str(value)) == 0:
+            if value is None or not str(value):
                 out_file.write( '%-*s +=\n' % (namelen, name) )
             else:
                 out_file.write( '%-*s += %s\n' % (namelen, name, value) )
+        elif value is None or not str(value):
+            out_file.write( '%-*s  =\n' % (namelen, name) )
         else:
-            if value == None or len(str(value)) == 0:
-                out_file.write( '%-*s  =\n' % (namelen, name) )
-            else:
-                out_file.write( '%-*s  = %s\n' % (namelen, name, value) )
+            out_file.write( '%-*s  = %s\n' % (namelen, name, value) )
 
     def _outputM4( self, out_file, namelen, name, value ):
         namelen += 7
-        name = '<<__%s>>,' % name.replace( '.', '_' )
+        name = f"<<__{name.replace('.', '_')}>>,"
         out_file.write( 'define(%-*s  <<%s>>)dnl\n' % (namelen, name, value ))
 
     def add( self, name, value, append=False ):
@@ -1219,12 +1213,12 @@ class ConfigDocument:
     def output( self, out_file, type ):
         namelen = 0
         for item in self._elements:
-            if item == None or item[0].find( '?' ) == 0:
+            if item is None or item[0].find('?') == 0:
                 continue
             if len(item[0]) > namelen:
                 namelen = len(item[0])
         for item in self._elements:
-            if item == None:
+            if item is None:
                 if type == 'm4':
                     out_file.write( 'dnl\n' )
                 else:
@@ -1242,20 +1236,20 @@ class ConfigDocument:
 
     def update( self, name, value ):
         for item in self._elements:
-            if item == None:
+            if item is None:
                 continue
             if item[0] == name:
                 item[1] = value
                 return
-        raise ValueError( 'element not found: %s' % (name) )
+        raise ValueError(f'element not found: {name}')
 
     def write( self, type ):
-        if type == 'make':
+        if type == 'm4':
+            fname = os.path.join('project', f'{project.name_lower}.m4')
+        elif type == 'make':
             fname = 'GNUmakefile'
-        elif type == 'm4':
-            fname = os.path.join( 'project', project.name_lower + '.m4' )
         else:
-            raise ValueError('unknown file type: ' + type)
+            raise ValueError(f'unknown file type: {type}')
 
         ftmp = cfg.mktmpname(fname)
         try:

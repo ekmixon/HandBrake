@@ -74,14 +74,17 @@ class Tool(hb_distfile.Tool):
             sys.exit(0)
         if len(self.args) < 1:
             raise error('no file specified')
-        if len(self.args) > 1:
-            filename = self.args[1]
-        else:
-            filename = self.args[0]
+        filename = self.args[1] if len(self.args) > 1 else self.args[0]
         if self.options.sha256:
             error.op = 'verify'
             r = self._verify(filename)
-            self.infof('sha256 (%s) = %s (%s)\n', filename, r.scan.sha256, 'pass' if r.status else 'fail; expecting %s' % self.options.sha256)
+            self.infof(
+                'sha256 (%s) = %s (%s)\n',
+                filename,
+                r.scan.sha256,
+                'pass' if r.status else f'fail; expecting {self.options.sha256}',
+            )
+
         else:
             error.op = 'scan'
             r = self._scan(filename)
@@ -93,7 +96,7 @@ class Tool(hb_distfile.Tool):
             self._run(error)
         except Exception as x:
             self.debug_exception()
-            self.errln('%s failure; %s' % (error.op,x), exit=1)
+            self.errln(f'{error.op} failure; {x}', exit=1)
 
 ###############################################################################
 

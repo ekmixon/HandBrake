@@ -10,11 +10,10 @@ import argparse
 from xml.parsers import expat
 from xml.parsers.expat import ExpatError
 
-resources = dict()
-stack = list()
-inc_list = list()
+resources = {}
+inc_list = []
 
-stack.append(resources)
+stack = [resources]
 
 
 def end_element_handler(tag):
@@ -28,7 +27,7 @@ def start_element_handler(tag, attr):
     val = None
     if tag == "section":
         key = attr["name"]
-        val = dict()
+        val = {}
         stack.append(val)
     elif tag == "integer":
         key = attr["name"]
@@ -102,14 +101,11 @@ def resource_parse_file(infile):
 
 def find_file(name):
     for inc_dir in inc_list:
-        inc = "%s/%s" % (inc_dir, name)
+        inc = f"{inc_dir}/{name}"
         if os.path.isfile(inc):
             return inc
 
-    if os.path.isfile(name):
-        return name
-
-    return None
+    return name if os.path.isfile(name) else None
 
 
 def main():
@@ -123,8 +119,7 @@ def main():
     if args.I:
         inc_list.append(args.I)
 
-    parsed_res = resource_parse_file(args.infile)
-    if parsed_res:
+    if parsed_res := resource_parse_file(args.infile):
         json.dump(parsed_res, args.outfile, indent=4, sort_keys=True)
 
 
